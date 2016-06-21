@@ -21,17 +21,20 @@ class ClosureTest(unittest.TestCase):
 
         self.c_tree = ClosureTree()
         self.c_tree.add_node('A')
-        self.c_tree.add_node('B', 1)
-        self.c_tree.add_node('C', 1)
-        self.c_tree.add_node('D', 2)
-        self.c_tree.add_node('E', 2)
-        self.c_tree.add_node('F', 1)
-        self.c_tree.add_node('G', 6)
+        self.c_tree.add_node('B', 'A', True)
+        self.c_tree.add_node('C', 'A', True)
+        self.c_tree.add_node('D', 'B', True)
+        self.c_tree.add_node('E', 'B', True)
+        self.c_tree.add_node('F', 'A', True)
+        self.c_tree.add_node('G', 'F', True)
         self.c_tree.add_node('X')
+        self.c_tree.add_node('Y', 'X', True)
 
     def test_print(self):
         """
-        Just prints all the tables.
+        Just prints stuff.
         """
 
         self.c_tree.print_tables()
+        print('Path for D:')
+        self.c_tree.print_path(self.c_tree.get_first_id('Y'))

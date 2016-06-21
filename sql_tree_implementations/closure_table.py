@@ -1,5 +1,5 @@
 from sqlalchemy import (create_engine, MetaData, Table, Column, Integer, Text, PrimaryKeyConstraint, ForeignKey,
-                        select, union_all, bindparam)
+                        select, union_all, bindparam, desc)
 
 
 class ClosureTree:
@@ -47,8 +47,29 @@ class ClosureTree:
             select(
                 [self.nodes]
             ).where(
-                self.nodes.c.id == node_id)
+                self.nodes.c.id == node_id
+            )
         ).fetchone()
+
+    def get_first_id(self, node_title, connection=None):
+        """
+        Retrieves the id of the first node found with the given title.
+        :param node_title: the title of the node to be searched.
+        :param connection: a database connection
+        :return: the id of the node if found, or None otherwise
+        """
+
+        connection = connection or self.engine.connect()
+
+        node = connection.execute(
+            select(
+                [self.nodes.c.id]
+            ).where(
+                self.nodes.c.title == node_title
+            )
+        ).fetchone()
+
+        return node and node.id
 
     def node_exists(self, node_id, connection=None):
         """
@@ -62,11 +83,12 @@ class ClosureTree:
 
         return self.get_node(node_id, connection) is not None
 
-    def add_node(self, title='', parent=None):
+    def add_node(self, title='', parent=None, by_title=False):
         """
         Add a new child element to a parent.
         :param title: the title of the child element.
-        :param parent: the parent of the child element
+        :param parent: the parent of the child element.
+        :param by_title: if True, it will use the first id found for the parent title
         """
 
         sel_stmt = []
@@ -78,6 +100,11 @@ class ClosureTree:
             parent_id = parent_id.id
         except AttributeError:
             pass
+
+        if by_title:
+            parent = self.get_first_id(parent)
+            if not parent:
+                raise Exception('Parent node does not exist.')
 
         if parent_id is not None:
             # check parent exists
@@ -150,6 +177,41 @@ class ClosureTree:
                 self.paths.c.depth == '1'
             )
         )
+
+    def get_ancestors(self, node_id, connection=None):
+        """
+        Retrieves the ancestors in descending order of depth (useful for building node location (path from root).
+        :param node_id: the id of the node
+        :param connection: a database connection
+        :return: a ResultProxy containing the ancestors of the given node
+        """
+
+        connection = connection or self.engine.connect()
+
+        return connection.execute(
+            select(
+                [self.paths, self.nodes.c.title]
+            ).select_from(
+                self.paths.join(self.nodes, self.nodes.c.id == self.paths.c.ancestor)
+            ).where(
+                self.paths.c.descendant == node_id
+            ).order_by(
+                desc(self.paths.c.depth)
+            )
+        )
+
+    def print_path(self, node_id, connection=None):
+        """
+        Prints the ancestors of the node descending depth order.
+        :param node_id: the id of the node.
+        :param connection: a database connection
+        """
+
+        connection = connection or self.engine.connect()
+
+        ancestors = self.get_ancestors(node_id, connection)
+
+        print(' -> '.join(x.title for x in ancestors))
 
     def print_table(self, table, connection=None):
         """
