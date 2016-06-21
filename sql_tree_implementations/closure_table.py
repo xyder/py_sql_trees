@@ -3,7 +3,15 @@ from sqlalchemy import (create_engine, MetaData, Table, Column, Integer, Text, P
 
 
 class ClosureTree:
+    """
+    Class to create a structure that can store trees using closure tables.
+    """
+
     def __init__(self):
+        """
+        Instance initialization.
+        """
+
         self.engine = create_engine('sqlite:///:memory:')
         self.metadata = MetaData()
 
@@ -25,6 +33,35 @@ class ClosureTree:
         # create tables
         self.metadata.create_all(self.engine)
 
+    def get_node(self, node_id, connection=None):
+        """
+        Retrieves the node from the Nodes table.
+        :param node_id: the id of the node
+        :param connection: a database connection
+        :return: a row object or None of the node does not exist
+        """
+
+        connection = connection or self.engine.connect()
+
+        return connection.execute(
+            select(
+                [self.nodes]
+            ).where(
+                self.nodes.c.id == node_id)
+        ).fetchone()
+
+    def node_exists(self, node_id, connection=None):
+        """
+        Checks if a node exists in the Nodes table.
+        :param node_id: the id of the node
+        :param connection: a database connection
+        :return: True if the node exists, False otherwise
+        """
+
+        connection = connection or self.engine.connect()
+
+        return self.get_node(node_id, connection) is not None
+
     def add_node(self, title='', parent=None):
         """
         Add a new child element to a parent.
@@ -44,14 +81,8 @@ class ClosureTree:
 
         if parent_id is not None:
             # check parent exists
-            parent_node = conn.execute(
-                select(
-                    [self.nodes]
-                ).where(
-                    self.nodes.c.id == parent_id)
-            ).fetchone()
 
-            if not parent_node:
+            if not self.node_exists(parent_id):
                 raise Exception('Parent node does not exist.')
 
             # store new node
@@ -79,59 +110,36 @@ class ClosureTree:
         # add paths
         conn.execute(self.paths.insert().from_select(['ancestor', 'descendant', 'depth'], union_all(*sel_stmt)))
 
-    def print_table(self, table):
-        conn = self.engine.connect()
-        result = conn.execute(select([table]))
-        print(
-            '-----------------------------------------------------------'
-            '\nColumns:\n\t{}\nData:\n\t{}\n'
-            '-----------------------------------------------------------'.format(
-                table.columns, '\n\t'.join(str(row) for row in result)
+    def get_roots(self, connection=None):
+        """
+        Get the root nodes.
+        :param connection: a database connection
+        :return: a ResultProxy instance with the root nodes
+        """
+
+        connection = connection or self.engine.connect()
+
+        return connection.execute(
+            select(
+                [self.nodes.c.title, self.nodes.c.id.label('descendant')]
+            ).where(
+                self.nodes.c.id.notin_(
+                    select([self.paths.c.descendant]).where(self.paths.c.depth > 0)
+                )
             )
         )
 
-        result.close()
-
-    def view_tree(self, node=None, prefix=' '):
+    def get_descendants(self, node_id, connection=None):
         """
-        Print a tree in a more visual style.
-        :param node: the starting node of the tree.
-        :param prefix: string that will be appeneded to the node and all its children
+        Get the descendants of the given node.
+        :param node_id: the id of the node
+        :param connection: a database connection
+        :return: a ResultProxy instance with the descendants of the node with id = node_id
         """
 
-        conn = self.engine.connect()
+        connection = connection or self.engine.connect()
 
-        if not node:
-            # get roots
-            roots = conn.execute(
-                select(
-                    [self.nodes.c.title, self.nodes.c.id.label('descendant')]
-                ).where(
-                    self.nodes.c.id.notin_(
-                        select([self.paths.c.descendant]).where(self.paths.c.depth > 0)
-                    )
-                )
-            )
-
-            if not roots:
-                print('No root nodes found.')
-                return
-
-            for node in roots:
-                # print tree for each root
-                self.view_tree(node)
-                print()
-
-            return
-        else:
-            node_title = node.title
-            node_id = node.descendant
-
-        # print the current node
-        print('{}({}, {})'.format(prefix, node_id, node_title))
-
-        # fetch the children for the current node
-        children = conn.execute(
+        return connection.execute(
             select(
                 [self.paths, self.nodes.c.title]
             ).select_from(
@@ -143,16 +151,70 @@ class ClosureTree:
             )
         )
 
+    def print_table(self, table, connection=None):
+        """
+        Print a table from the database.
+        :param table: a SQLA Table
+        :param connection: a database connection
+        """
+
+        connection = connection or self.engine.connect()
+        result = connection.execute(select([table]))
+        print(
+            '-----------------------------------------------------------'
+            '\nColumns:\n\t{}\nData:\n\t{}\n'
+            '-----------------------------------------------------------'.format(
+                table.columns, '\n\t'.join(str(row) for row in result)
+            )
+        )
+
+        result.close()
+
+    def view_tree(self, node=None, prefix=' ', connection=None):
+        """
+        Print a tree in a more visual style.
+        :param node: the starting node of the tree.
+        :param prefix: string that will be appeneded to the node and all its children
+        :param connection: a database connection
+        """
+
+        connection = connection or self.engine.connect()
+
+        if not node:
+            # get roots
+            roots = self.get_roots(connection)
+
+            if not roots:
+                print('No root nodes found.')
+                return
+
+            for node in roots:
+                # print tree for each root
+                self.view_tree(node, connection=connection)
+                print()
+
+            return
+        else:
+            node_title = node.title
+            node_id = node.descendant
+
+        # print the current node
+        print('{}({}, {})'.format(prefix, node_id, node_title))
+
+        # fetch the children for the current node
+        children = self.get_descendants(node_id, connection)
+
         # print the tree for each node
         prefix += '.       '
         for child in children:
-            self.view_tree(child, prefix=prefix)
+            self.view_tree(child, prefix=prefix, connection=connection)
 
     def print_tables(self):
         """
         Prints all tables and the visual tree representation.
         """
 
-        self.print_table(self.nodes)
-        self.print_table(self.paths)
-        self.view_tree()
+        conn = self.engine.connect()
+        self.print_table(self.nodes, conn)
+        self.print_table(self.paths, conn)
+        self.view_tree(connection=conn)
