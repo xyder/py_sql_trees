@@ -102,8 +102,8 @@ class ClosureTree:
             pass
 
         if by_title:
-            parent = self.get_first_id(parent)
-            if not parent:
+            parent_id = self.get_first_id(parent)
+            if not parent_id:
                 raise Exception('Parent node does not exist.')
 
         if parent_id is not None:
@@ -136,6 +136,25 @@ class ClosureTree:
 
         # add paths
         conn.execute(self.paths.insert().from_select(['ancestor', 'descendant', 'depth'], union_all(*sel_stmt)))
+
+    def dettach_node(self, node_id, connection=None):
+        """
+        Deletes all paths leading to a node, creating a new tree formed by its subtree.
+        :param node_id: the id of the node
+        :param connection: a database connection
+        """
+
+        connection = connection or self.engine.connect()
+
+        connection.execute(
+            self.paths.delete().where(self.paths.c.descendant == node_id)
+        )
+
+    def delete_node(self, node_id, connection=None):
+        pass
+
+    def move_node(self, node_id, connection=None):
+        pass
 
     def get_roots(self, connection=None):
         """

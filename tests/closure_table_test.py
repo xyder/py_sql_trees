@@ -36,5 +36,11 @@ class ClosureTest(unittest.TestCase):
         """
 
         self.c_tree.print_tables()
+
+        print('=========================')
+
+        self.c_tree.dettach_node(self.c_tree.get_first_id('B'))
+        self.c_tree.view_tree()
+
         print('Path for D:')
         self.c_tree.print_path(self.c_tree.get_first_id('Y'))
