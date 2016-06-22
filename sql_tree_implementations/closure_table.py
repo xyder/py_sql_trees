@@ -108,7 +108,6 @@ class ClosureTree:
 
         if parent_id is not None:
             # check parent exists
-
             if not self.node_exists(parent_id):
                 raise Exception('Parent node does not exist.')
 
@@ -137,9 +136,9 @@ class ClosureTree:
         # add paths
         conn.execute(self.paths.insert().from_select(['ancestor', 'descendant', 'depth'], union_all(*sel_stmt)))
 
-    def dettach_node(self, node_id, connection=None):
+    def detach_node(self, node_id, connection=None):
         """
-        Deletes all paths leading to a node, creating a new tree formed by its subtree.
+        Deletes all paths leading to or begin with a node, creating a new tree formed by its subtree.
         :param node_id: the id of the node
         :param connection: a database connection
         """
@@ -147,14 +146,71 @@ class ClosureTree:
         connection = connection or self.engine.connect()
 
         connection.execute(
-            self.paths.delete().where(self.paths.c.descendant == node_id)
+            self.paths.delete().where(
+                self.paths.c.descendant.in_(
+                    select([self.paths.c.descendant]).where(
+                        self.paths.c.ancestor == node_id
+                    ))
+            ).where(
+                self.paths.c.ancestor.in_(
+                    select([self.paths.c.ancestor]).where(
+                        self.paths.c.descendant == node_id
+                    ).where(
+                        self.paths.c.ancestor != self.paths.c.descendant
+                    ))
+            )
         )
 
-    def delete_node(self, node_id, connection=None):
-        pass
+    def attach_node(self, node_id, new_parent_id, connection=None):
+        """
+        Attach a root node under a new parent node.
+        :param node_id: the id of the root node
+        :param new_parent_id: the id of the new parent
+        :param connection: a database connection
+        """
 
-    def move_node(self, node_id, connection=None):
-        pass
+        connection = connection or self.engine.connect()
+
+        # todo: add check parent/node exist
+        # todo: add check node is root of a tree
+
+        paths_super_tree = self.paths.alias()
+        paths_sub_tree = self.paths.alias()
+
+        connection.execute(
+            self.paths.insert().from_select(names=[
+                'ancestor', 'descendant', 'depth'
+            ],
+                select=select([
+                    paths_super_tree.c.ancestor,
+                    paths_sub_tree.c.descendant,
+                    (paths_super_tree.c.depth + paths_sub_tree.c.depth + 1)
+                ]).where(
+                    paths_super_tree.c.descendant == new_parent_id
+                ).where(
+                    paths_sub_tree.c.ancestor == node_id
+                )
+            )
+        )
+
+    def is_root(self):
+        raise NotImplementedError
+
+    def delete_node(self, node_id, connection=None):
+        raise NotImplementedError
+
+    def move_node(self, node_id, new_parent_id, connection=None):
+        """
+        Moves a node under a different parent node.
+        :param node_id: the id of the node to be moved
+        :param new_parent_id: the id of the new parent node
+        :param connection: a database connection
+        """
+
+        connection = connection or self.engine.connect()
+
+        self.detach_node(node_id=node_id, connection=connection)
+        self.attach_node(node_id=node_id, new_parent_id=new_parent_id, connection=connection)
 
     def get_roots(self, connection=None):
         """

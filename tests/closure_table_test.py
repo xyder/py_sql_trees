@@ -38,8 +38,8 @@ class ClosureTest(unittest.TestCase):
         self.c_tree.print_tables()
 
         print('=========================')
-
-        self.c_tree.dettach_node(self.c_tree.get_first_id('B'))
+        print('Move B under C.')
+        self.c_tree.move_node(self.c_tree.get_first_id('B'), self.c_tree.get_first_id('C'))
         self.c_tree.view_tree()
 
         print('Path for D:')
