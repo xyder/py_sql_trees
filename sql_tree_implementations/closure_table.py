@@ -1,5 +1,5 @@
 from sqlalchemy import (create_engine, MetaData, Table, Column, Integer, Text, PrimaryKeyConstraint, ForeignKey,
-                        select, union_all, bindparam, desc)
+                        select, union_all, bindparam, desc, func)
 
 
 class ClosureTree:
@@ -32,6 +32,16 @@ class ClosureTree:
 
         # create tables
         self.metadata.create_all(self.engine)
+
+    def node_count(self, connection=None):
+        """
+        Returns the number of nodes.
+        :param connection: a database connection
+        :return: the number of stored nodes.
+        """
+
+        connection = connection or self.engine.connect()
+        return connection.execute(select([func.count()]).select_from(self.nodes)).fetchone()[0]
 
     def get_node(self, node_id, connection=None):
         """
@@ -135,6 +145,8 @@ class ClosureTree:
 
         # add paths
         conn.execute(self.paths.insert().from_select(['ancestor', 'descendant', 'depth'], union_all(*sel_stmt)))
+
+        return new_node_pk
 
     def detach_node(self, node_id, connection=None):
         """
