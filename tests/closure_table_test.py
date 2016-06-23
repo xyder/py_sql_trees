@@ -1,9 +1,6 @@
-import cProfile
 import unittest
 from random import randint
 from timeit import Timer
-
-from sqlalchemy import select, func
 
 from sql_tree_implementations import ClosureTree
 
@@ -91,7 +88,7 @@ class ClosureTest(unittest.TestCase):
         # create tree randomly and recursively
         tree = ClosureTree()
         root_id = tree.add_node('root')
-        self._generate_tree(tree, root_id)
+        self._generate_tree(tree, root_id, max_depth=5, branch_size=5)
 
         print('Stress test for moving nodes. Tree size: {}'.format(tree.node_count()))
 
