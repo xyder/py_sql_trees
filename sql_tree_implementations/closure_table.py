@@ -205,11 +205,53 @@ class ClosureTree:
             )
         )
 
-    def is_root(self):
-        raise NotImplementedError
+    def is_root(self, node_id, connnection=None):
+        """
+        Checks if the node with the given id is root or not.
+        :param node_id: the id of the node to be checked
+        :param connnection: a database connection
+        :return: True if the node is root, False otherwise.
+        """
+
+        connnection = connnection or self.engine.connect()
+
+        return connnection.execute(
+            select(
+                [self.paths]
+            ).where(
+                self.paths.c.depth > 0
+            ).where(
+                self.paths.c.descendant == node_id
+            )
+        ).fetchone() is None
 
     def delete_node(self, node_id, connection=None):
-        raise NotImplementedError
+        """
+        Delete the node with the specified id and all it's descendants.
+        :param node_id: the id of the node to be removed
+        :param connection: a database connection
+        """
+
+        connection = connection or self.engine.connect()
+
+        # delete the paths associated with this node
+        connection.execute(
+            self.paths.delete().where(
+                self.paths.c.descendant.in_(
+                    select(
+                        [self.paths.c.descendant]
+                    ).where(
+                        self.paths.c.ancestor == node_id
+                    ))
+            )
+        )
+
+        # delete the node
+        connection.execute(
+            self.nodes.delete().where(
+                self.nodes.c.id == node_id
+            )
+        )
 
     def move_node(self, node_id, new_parent_id, connection=None):
         """

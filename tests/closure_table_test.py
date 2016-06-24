@@ -31,6 +31,8 @@ class ClosureTest(unittest.TestCase):
         self.c_tree.add_node('G', 'F', True)
         self.c_tree.add_node('X')
         self.c_tree.add_node('Y', 'X', True)
+        self.c_tree.add_node('Z', 'Y', True)
+        self.c_tree.add_node('W', 'X', True)
 
     def test_print(self):
         """
@@ -38,6 +40,10 @@ class ClosureTest(unittest.TestCase):
         """
 
         self.c_tree.print_tables()
+
+        self.c_tree.delete_node(self.c_tree.get_first_id('W'))
+        print('Tree after deleting "W"')
+        self.c_tree.view_tree()
 
         print('=========================')
         print('Move B under C.')
@@ -88,7 +94,7 @@ class ClosureTest(unittest.TestCase):
         # create tree randomly and recursively
         tree = ClosureTree()
         root_id = tree.add_node('root')
-        self._generate_tree(tree, root_id, max_depth=5, branch_size=5)
+        self._generate_tree(tree, root_id, max_depth=2, branch_size=2)
 
         print('Stress test for moving nodes. Tree size: {}'.format(tree.node_count()))
 
